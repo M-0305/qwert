@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🎂 生日惊喜</title>
+<style>
+/* ============================================================
+   全局
+============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  overflow: hidden;
+  background: #f2a9be;
+}
+button { font-family: inherit; border: none; background: none; cursor: pointer; }
+
+/* 屏幕切换 */
+.screen {
+  position: fixed; inset: 0;
+  opacity: 0; pointer-events: none;
+  transition: opacity .8s ease;
+}
+.screen.active { opacity: 1; pointer-events: auto; }
+
+/* ============================================================
+   第 1 屏 · 密码锁
+============================================================ */
+#lockScreen {
+  display: flex; align-items: center; justify-content: center;
+}
+/* 📌【背景图 1：锁屏背景】图片链接稍后填入下方 JS 的 CONFIG.LOCK_BG，
+   未填时显示此粉色渐变占位 */
+.lock-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background:
+	radial-gradient(120% 90% at 50% 38%, #fbd3dc 0%, #f6b3c4 42%, #ef97af 72%, #e9809c 100%);
+  background-size: cover; background-position: center;
+}
+.lock-card {
+  position: relative; z-index: 1;
+  width: min(88vw, 350px);
+  padding: 34px 30px 20px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, .22);
+  border: 1px solid rgba(255, 255, 255, .4);
+  /* backdrop-filter 是移动端最耗性能的属性之一（每帧重算模糊）。
+	 这里用较轻的模糊 + 提升为独立合成层，兼顾观感与流畅度 */
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 18px 45px rgba(190, 80, 110, .25);
+  display: flex; flex-direction: column; align-items: center;
+  transition: transform .7s ease, opacity .7s ease;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.lock-card.exit { transform: scale(1.15); opacity: 0; }
+.lock-card.shake { animation: shake .45s ease; }
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-9px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(4px); }
+}
+
+/* App 图标（可替换为自己的图片：往 .app-icon 里放 <img> 即可） */
+.app-icon {
+  width: 88px; height: 88px;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(180, 60, 100, .28);
+  background: linear-gradient(160deg, #ffe9f0, #ffd0e0);
+}
+.app-icon svg { width: 100%; height: 100%; display: block; }
+
+.lock-title {
+  margin-top: 18px;
+  color: #fff; font-size: 22px; font-weight: 700; letter-spacing: 1px;
+  text-shadow: 0 2px 6px rgba(190, 90, 120, .35);
+}
+.lock-hint {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, .92); font-size: 12px;
+  display: flex; align-items: center; gap: 5px;
+}
+.lock-hint .num {
+  display: inline-block; min-width: 17px; height: 17px; line-height: 15px;
+  border: 1px solid rgba(255, 255, 255, .8); border-radius: 5px;
+  font-size: 11px; text-align: center; padding: 0 2px;
+}
+
+/* 密码输入框 */
+.input-wrap {
+  margin-top: 16px;
+  width: 100%; height: 46px;
+  background: #fff; border-radius: 999px;
+  display: flex; align-items: center;
+  padding: 0 6px 0 20px;   /* 右侧留窄，让眼睛按钮完整落在框内 */
+  box-shadow: 0 4px 14px rgba(190, 80, 110, .14);
+}
+.input-wrap input {
+  flex: 1; min-width: 0; height: 100%;
+  border: none; outline: none; background: transparent;
+  text-align: center;
+  font-size: 18px; letter-spacing: 6px;
+  color: #555; caret-color: #ef7d95;
+}
+.input-wrap input::placeholder { letter-spacing: 1px; color: #c9c9c9; font-size: 14px; }
+.input-wrap input:disabled { color: #bbb; }
+.eye-btn {
+  flex: 0 0 auto;
+  width: 36px; height: 36px; margin-right: 4px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #a9a9a9;
+  transition: background .2s ease, color .2s ease;
+}
+.eye-btn:active { background: rgba(239, 125, 149, .14); color: #ef7d95; }
+.eye-btn svg { width: 20px; height: 20px; display: block; }
+
+/* 消息 / 提示卡槽位（保持布局不跳动，出卡时自动撑高） */
+.msg {
+  height: 20px; margin-top: 9px;
+  font-size: 12px; color: #e0475f;
+  display: flex; align-items: center; justify-content: center;
+  transition: height .35s ease, margin-top .35s ease;
+}
+.msg.hint-ok { color: #fff; }
+.msg.has-card { height: auto; margin-top: 12px; }
+
+/* 进入按钮 */
+.enter-btn {
+  margin-top: 4px;
+  min-width: 108px; height: 38px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f89a84, #ee7663);
+  color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 2px;
+  box-shadow: 0 6px 16px rgba(230, 100, 80, .35);
+  transition: transform .15s ease, box-shadow .15s ease, opacity .3s;
+}
+.enter-btn:active { transform: scale(.94); }
+.enter-btn:disabled { opacity: .6; }
+
+/* 底部提示（点击可查看密码提示） */
+.footer-tip {
+  margin-top: 16px;
+  color: rgba(255, 255, 255, .78); font-size: 10.5px; letter-spacing: .5px;
+  cursor: pointer;
+  text-decoration: underline dotted rgba(255,255,255,.4);
+  text-underline-offset: 3px;
+  padding: 4px 8px; border-radius: 999px;
+  transition: color .4s ease, opacity .4s ease, background .4s ease;
+}
+.footer-tip.locked { color: #ffe3a6; }
+.footer-tip.sealed { opacity: .5; }   /* 未满 3 次时：看起来仍是可点的，实为机关 */
+
+/* ── D 方案：满 3 次后底部小字的"呼吸发光"，提示它现在可以点了 ── */
+.footer-tip.armed {
+  color: #fff; opacity: 1;
+  font-weight: 600;
+  text-decoration: none;
+  background: rgba(255, 255, 255, .18);
+  animation: tipBreath 1.6s ease-in-out infinite;
+}
+@keyframes tipBreath {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,.55); opacity: .82; }
+  50%      { box-shadow: 0 0 0 9px rgba(255,255,255,0); opacity: 1; }
+}
+
+/* 满 3 次时，小字下方跳动的引导箭头 */
+.tip-arrow {
+  height: 0; overflow: visible;
+  text-align: center; font-size: 13px; color: #fff;
+  opacity: 0; transition: opacity .4s ease;
+  margin-top: 2px;
+}
+.tip-arrow.show { opacity: .95; animation: arrowBob 1.2s ease-in-out infinite; }
+@keyframes arrowBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+
+/* 满 3 次时浮现的引导语 */
+.guide-line {
+  font-size: 12.5px; color: #b8576d; letter-spacing: .5px;
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity .5s ease, transform .5s ease;
+  text-align: center;
+}
+.guide-line.show { opacity: 1; transform: translateY(0); }
+
+/* ── A 方案：提示卡 ── */
+.hint-card {
+  position: relative;
+  width: 100%;
+  padding: 15px 16px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .9);
+  border: 1.5px solid rgba(240, 150, 175, .65);
+  box-shadow: 0 10px 26px rgba(200, 90, 125, .24),
+			  inset 0 0 0 1px rgba(255, 255, 255, .8);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: scale(.92) translateY(-6px);
+  transition: opacity .42s cubic-bezier(.22,1,.36,1),
+			  transform .42s cubic-bezier(.22,1,.36,1);
+  text-align: center;
+}
+.hint-card.show { opacity: 1; transform: scale(1) translateY(0); }
